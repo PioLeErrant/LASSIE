@@ -56,6 +56,7 @@ int main(int argc, char* argv[])
 	string modelkind = "NA";
 	string cs_vector = "NA";
 	string M_feed = "NA";
+	string leak = "NA";
 
 	// check mandatory parameters
 	if(argc == 1)
@@ -149,6 +150,10 @@ int main(int argc, char* argv[])
 		{
 			volume = path + slash + files[ff];
 		}
+		else if(strcmp(files[ff].c_str(), "leak") == 0)
+        {
+        	volume = path + slash + files[ff];
+        }
 	}
 
 	//check mandatory model files
@@ -290,7 +295,7 @@ int main(int argc, char* argv[])
 	{
 		Simulation<float>* sim = new Simulation<float>();
 		timeSim = sim -> run(A, B, c_vector, cs_vector, t_vector, MX_0, M_feed, modelkind, folder,
-				verbose, atol_vector, be_step, newton_iter, newton_tol, rkf_step, stiffness_tol, volume, temp1);
+				verbose, atol_vector, be_step, newton_iter, newton_tol, rkf_step, stiffness_tol, volume, temp1,leak);
 	}
 	//run simulation using double floating point precision
 	else
@@ -299,7 +304,7 @@ int main(int argc, char* argv[])
 		{
 			Simulation<double>* sim = new Simulation<double>();
 			timeSim = sim -> run(A, B, c_vector, cs_vector, t_vector, MX_0, M_feed, modelkind, folder,
-				verbose, atol_vector, be_step, newton_iter, newton_tol, rkf_step, stiffness_tol, volume, temp1);
+				verbose, atol_vector, be_step, newton_iter, newton_tol, rkf_step, stiffness_tol, volume, temp1,leak);
 		}
 	}
 	cudaEventRecord( stop, 0 );

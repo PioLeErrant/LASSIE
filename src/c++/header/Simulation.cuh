@@ -231,7 +231,7 @@ public:
 			string t_vector1, string MX_0, string M_feed1, string modelkind1,
 			string folder, int verbose, string atol_vector1, string be_step,
 			string newton_iter, string newton_tol, string rkf_step, 
-			string stiffness_tol, string volume1, string prec)
+			string stiffness_tol, string volume1, string prec, string leak1)
 	{
 
 		CUDA_CHECK_RETURN(cudaDeviceSetCacheConfig(cudaFuncCachePreferL1));
@@ -261,6 +261,7 @@ public:
 		//int modelkind = reader -> readType(modelkind1);
 
 		T dt_ei, dt_rkf, tollN, isStiff;
+		T leak;
 		vector<T> atol_vector;
 		vector<T> M_feed;
 		vector<int> cs_vector;
@@ -353,6 +354,15 @@ public:
 			modelkind = 0;
 		}
 
+		if(strcmp(leak1.c_str(), "NA") != 0)
+		{
+		    leak = reader -> readSingleValue(leak1);
+		}
+		else
+		{
+		    leak = 0;
+		}
+
 		int bdf = 1;
 
 		if(verbose)
@@ -367,6 +377,7 @@ public:
 			cout << "Stiffness tollerance = " << isStiff << "\n";
 			cout << "Runge-Kutta-Fehlberg's tollerances = " << atol_vector[0] << "\n";
 			cout << "Float pointing precision = " << prec << "\n";
+			cout << "Leak =" << leak << "\n";
 
 		}
 
@@ -693,37 +704,37 @@ public:
 			}
 
 			// k1
-			generate_ode<T><<<n_blocks, n_threads>>>(ode_poliDEV, offset_poliDEV, ode_moniDEV, offset_moniDEV, c_vectorDEV, dev_y1, dev_k1, Nb_species);
+			generate_ode<T><<<n_blocks, n_threads>>>(ode_poliDEV, offset_poliDEV, ode_moniDEV, offset_moniDEV, c_vectorDEV, dev_y1, dev_k1, Nb_species,leak);
 			cudaDeviceSynchronize();
 			rk_Fehlberg1<T><<<n_blocks, n_threads>>>(Nb_species, dt, dev_y1, dev_k1, dev_u, M_feedDEV);
 			cudaDeviceSynchronize();
 
 			// k2
-			generate_ode<T><<<n_blocks, n_threads>>>(ode_poliDEV, offset_poliDEV, ode_moniDEV, offset_moniDEV, c_vectorDEV, dev_u, dev_k2, Nb_species);
+			generate_ode<T><<<n_blocks, n_threads>>>(ode_poliDEV, offset_poliDEV, ode_moniDEV, offset_moniDEV, c_vectorDEV, dev_u, dev_k2, Nb_species,leak);
 			cudaDeviceSynchronize();
 			rk_Fehlberg2<T><<<n_blocks, n_threads>>>(Nb_species, dt, dev_y1, dev_k1, dev_k2, dev_u, M_feedDEV);
 			cudaDeviceSynchronize();
 
 			// k3
-			generate_ode<T><<<n_blocks, n_threads>>>(ode_poliDEV, offset_poliDEV, ode_moniDEV, offset_moniDEV, c_vectorDEV, dev_u, dev_k3, Nb_species);
+			generate_ode<T><<<n_blocks, n_threads>>>(ode_poliDEV, offset_poliDEV, ode_moniDEV, offset_moniDEV, c_vectorDEV, dev_u, dev_k3, Nb_species,leak);
 			cudaDeviceSynchronize();
 			rk_Fehlberg3<T><<<n_blocks, n_threads>>>(Nb_species, dt, dev_y1, dev_k1, dev_k2, dev_k3, dev_u, M_feedDEV);
 			cudaDeviceSynchronize();
 
 			// k4
-			generate_ode<T><<<n_blocks, n_threads>>>(ode_poliDEV, offset_poliDEV, ode_moniDEV, offset_moniDEV, c_vectorDEV, dev_u, dev_k4, Nb_species);
+			generate_ode<T><<<n_blocks, n_threads>>>(ode_poliDEV, offset_poliDEV, ode_moniDEV, offset_moniDEV, c_vectorDEV, dev_u, dev_k4, Nb_species,leak);
 			cudaDeviceSynchronize();
 			rk_Fehlberg4<T><<<n_blocks, n_threads>>>(Nb_species, dt, dev_y1, dev_k1, dev_k2, dev_k3, dev_k4, dev_u, M_feedDEV);
 			cudaDeviceSynchronize();
 
 			// k5
-			generate_ode<T><<<n_blocks, n_threads>>>(ode_poliDEV, offset_poliDEV, ode_moniDEV, offset_moniDEV, c_vectorDEV, dev_u, dev_k5, Nb_species);
+			generate_ode<T><<<n_blocks, n_threads>>>(ode_poliDEV, offset_poliDEV, ode_moniDEV, offset_moniDEV, c_vectorDEV, dev_u, dev_k5, Nb_species,leak);
 			cudaDeviceSynchronize();
 			rk_Fehlberg5<T><<<n_blocks, n_threads>>>(Nb_species, dt, dev_y1, dev_k1, dev_k2, dev_k3, dev_k4, dev_k5, dev_u, M_feedDEV);
 			cudaDeviceSynchronize();
 
 			// k6
-			generate_ode<T><<<n_blocks, n_threads>>>(ode_poliDEV, offset_poliDEV, ode_moniDEV, offset_moniDEV, c_vectorDEV, dev_u, dev_k6, Nb_species);
+			generate_ode<T><<<n_blocks, n_threads>>>(ode_poliDEV, offset_poliDEV, ode_moniDEV, offset_moniDEV, c_vectorDEV, dev_u, dev_k6, Nb_species,leak);
 			cudaDeviceSynchronize();
 			rk_Fehlberg6<T><<<n_blocks, n_threads>>>(Nb_species, dt, dev_k6, M_feedDEV);
 			cudaDeviceSynchronize();
@@ -761,7 +772,7 @@ public:
 				thrust::device_vector<double> d_x(dev_delta, dev_delta + Nb_species);
 				thrust::device_vector<double>::iterator iter = thrust::min_element(d_x.begin(), d_x.end());
 				T d_temp = *iter;
-				cout<<"found d_temp"<<d_temp<<endl;
+//				cout<<"found d_temp"<<d_temp<<endl;
 				d_temp = dt * d_temp;
 
 				if((t + d_temp) > t1)
@@ -782,13 +793,13 @@ public:
 				T d_temp = *iter;
 				T dt_old = dt;
 				dt = dt * d_temp;
-				cout<<"found d_temp is "<<d_temp<<endl;
+//				cout<<"found d_temp is "<<d_temp<<endl;
 				//cout<<" fabs is "<<fabs(dt_old - dt) <<endl;
 				if(dt < isStiff | isnan(dt) | isinf(dt) | fabs(dt_old - dt) < 1e-3  ) //Why the last condition, even if it is the main one producing the switch...
 				{
-				    cout<<" dt_old is "<<dt_old<<endl;
-					cout<<" choosed dt is "<<min(newDtBDF,dt)<<"suggested where newDTBDF"<<newDtBDF<<" or "<<dt<<endl;
-					dt = min(newDtBDF,dt);
+//				    cout<<" dt_old is "<<dt_old<<endl;
+//					cout<<" choosed dt is "<<min(newDtBDF,dt)<<"suggested where newDTBDF"<<newDtBDF<<" or "<<dt<<endl;
+					dt = newDtBDF;
 
 
 					if( (t + dt) > t1 )
@@ -804,7 +815,7 @@ public:
 					// Newton-Raphson method
 					while(itN < iterN & errN > tollN)
 					{
-						generate_ode<T><<<n_blocks, n_threads>>>(ode_poliDEV, offset_poliDEV, ode_moniDEV, offset_moniDEV, c_vectorDEV, dev_y_v, dev_x, Nb_species);
+						generate_ode<T><<<n_blocks, n_threads>>>(ode_poliDEV, offset_poliDEV, ode_moniDEV, offset_moniDEV, c_vectorDEV, dev_y_v, dev_x, Nb_species,leak);
 						cudaDeviceSynchronize();
 
 						switch (numStep)
@@ -900,7 +911,7 @@ public:
 						T norm = sqrt(thrust::transform_reduce(d_x.begin(), d_x.end(), unary_op, init, binary_op));
                         //pierre's comment: this produces the norm of The X(n+1)-Xn, so the distance with previous values...
                         // therefore the error is considered as an absolute difference ==> strange that it is not relative.
-                        cout<<" computed norm "<<norm<<endl;
+//                        cout<<" computed norm "<<norm<<endl;
 						errN = norm;
 						itN = itN + 1;
 					}
@@ -933,7 +944,7 @@ public:
 					t = t + dt;
 				}
 			}
-            cout<<"current dt:"<<dt<<endl;
+//            cout<<"current dt:"<<dt<<endl;
 			if(numStep < bdf)
 				numStep++;
 		}

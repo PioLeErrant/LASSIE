@@ -3,7 +3,7 @@
 #include <iostream>   // std::cout
 
 template<class T>
-__global__ void generate_ode(short4* ode_poli, short2* offset_poli, short2* ode_moni, short2* offset_moni, T* c_vector, T* y0, T* y1, const int Nb_species)
+__global__ void generate_ode(short4* ode_poli, short2* offset_poli, short2* ode_moni, short2* offset_moni, T* c_vector, T* y0, T* y1, const int Nb_species, const int leak)
 {
 	int gid = threadIdx.x + blockDim.x * blockIdx.x;
 	if(gid < Nb_species)
@@ -45,6 +45,7 @@ __global__ void generate_ode(short4* ode_poli, short2* offset_poli, short2* ode_
 				y1[gid] = y1[gid] + signum * c_vector[k_pos];
 			}
 		}
+		y1[gid] += leak;
 		
 	}
 }
