@@ -1,0 +1,24 @@
+ODE 
+Allocating 4096 threads over 30 available streaming multiprocessors
+Putative TPB: 137 
+Adapting to warp size
+Final TPB: 160 
+Number of used blocks: 26 
+Total threads spawned: 4160 
+
+
+JAC 
+Allocating 16777216 threads over 30 available streaming multiprocessors
+Putative TPB: 256 
+Final TPB: 256 
+Number of used blocks: 65536 
+Total threads spawned: 16777216 
+
+
+DINAM-SUBSPEC 
+Allocating 4096 threads over 30 available streaming multiprocessors
+Putative TPB: 137 
+Adapting to warp size
+Final TPB: 160 
+Number of used blocks: 26 
+Total threads spawned: 4160 

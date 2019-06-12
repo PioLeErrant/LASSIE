@@ -392,7 +392,7 @@ public:
 
 		/* ********************************************************************************************************************************************* */
 
-		/* ******************** creating structure data to save differential equations ******************** */
+		cout << "\n /* ******************** creating structure data to save differential equations ******************** */ \n";
 		// create (B-A)'
 		vector<vector<short> > H = createTransposte(left_matrix, right_matrix);
 
@@ -406,6 +406,7 @@ public:
 		int Nb_times = t_vector.size();
 
 		int lenJac = Nb_species * Nb_species;
+
 
 		//polynomials
 		short4* ode_poli = (short4*) malloc(rowStructPoli * sizeof(short4));
@@ -427,8 +428,6 @@ public:
 		T* M_feed_point = &M_feed[0];
 
 		T* t_vector_point = &t_vector[0];
-
-
 
 		if(verbose>1)
 		{
@@ -658,19 +657,23 @@ public:
 		}
 
 		folder1 = folder + slash + "output" + slash + "ProgressSimulation";
+
 		fd=fopen(folder1.c_str(), "w");
+
 		if( fd==NULL )
 		{
 			perror("Error open output file ProgressSimulation");
 			exit(-11);
 		}
 
+
 		double t_max = t_vector_point[Nb_times-1];
+
 
 		while(i < (Nb_times))
 		{
 			fprintf(fd, "%.4e\n", t/t_max);
-			
+
 			if(fabs(t1 - t) < 1e-5)
 			{
 				saveDinamic<T><<<n_blocksDin, n_threadsDin>>>(Nb_speciesSaving, i, cs_vectorDEV, dev_y1, dinamicDEV);
@@ -734,10 +737,16 @@ public:
 			calculate_delta<T><<<n_blocks, n_threads>>>(Nb_species, dt, dev_w1, dev_w2, dev_R, dev_delta, dev_value, atol_vectorDEV);
 			cudaDeviceSynchronize();
 
+
 			//acceptance u as solution
-			count = 0;
-			thrust::device_vector<short> vec(dev_value, dev_value + Nb_species);
-			count =  thrust::count(vec.begin(), vec.end(), 1);
+			count=0;
+			// how I would write this:
+			thrust::device_ptr<int> vec_dev_ptr(dev_value);
+            count =  thrust::count(vec_dev_ptr, vec_dev_ptr+Nb_species, (int) 1);
+
+			// thrust::device_vector<short> vec(dev_value, dev_value  + Nb_species); //Old:thrust::device_vector<short> vec(dev_value,dev_value  + Nb_species);
+			// cout<<"OK"<<endl;
+			//count =  thrust::count(vec.begin(), vec.end(), 1);
 
 			if(count == Nb_species)
 			{
@@ -749,10 +758,10 @@ public:
 				CUDA_CHECK_RETURN(cudaMemcpy(dev_y1, dev_w1, Nb_species * sizeof(T),cudaMemcpyDeviceToDevice));
 				cudaDeviceSynchronize();
 
-
 				thrust::device_vector<double> d_x(dev_delta, dev_delta + Nb_species);
 				thrust::device_vector<double>::iterator iter = thrust::min_element(d_x.begin(), d_x.end());
 				T d_temp = *iter;
+				cout<<"found d_temp"<<d_temp<<endl;
 				d_temp = dt * d_temp;
 
 				if((t + d_temp) > t1)
@@ -766,18 +775,21 @@ public:
 
 				t = t + dt;
 			}
-			else
-
-			// repeat RKF or BE
-			{
+			else // repeat RKF or BE
+ 			{
 				thrust::device_vector<double> d_x(dev_delta, dev_delta + Nb_species);
 				thrust::device_vector<double>::iterator iter = thrust::min_element(d_x.begin(), d_x.end());
 				T d_temp = *iter;
 				T dt_old = dt;
 				dt = dt * d_temp;
-				if(dt < isStiff | isnan(dt) | isinf(dt) | fabs(dt_old - dt) < 1e-3)
+				cout<<"found d_temp is "<<d_temp<<endl;
+				//cout<<" fabs is "<<fabs(dt_old - dt) <<endl;
+				if(dt < isStiff | isnan(dt) | isinf(dt) | fabs(dt_old - dt) < 1e-3  ) //Why the last condition, even if it is the main one producing the switch...
 				{
-					dt = newDtBDF;
+				    cout<<" dt_old is "<<dt_old<<endl;
+					cout<<" choosed dt is "<<min(newDtBDF,dt)<<"suggested where newDTBDF"<<newDtBDF<<" or "<<dt<<endl;
+					dt = min(newDtBDF,dt);
+
 
 					if( (t + dt) > t1 )
 					{
@@ -864,7 +876,7 @@ public:
 						}
 
 						// LU decomposition --> solver linear system
-						ret = linearSolverLU(handle, Nb_species, dev_matJacTran, dev_x, dev_xJ);
+						ret = pierre_linearSolverLU(handle, Nb_species, dev_matJacTran, dev_x, dev_xJ);
 
 						if(ret == -1)
 						{
@@ -886,7 +898,9 @@ public:
 						thrust::plus<T> binary_op;
 						T init = 0.0f;
 						T norm = sqrt(thrust::transform_reduce(d_x.begin(), d_x.end(), unary_op, init, binary_op));
-
+                        //pierre's comment: this produces the norm of The X(n+1)-Xn, so the distance with previous values...
+                        // therefore the error is considered as an absolute difference ==> strange that it is not relative.
+                        cout<<" computed norm "<<norm<<endl;
 						errN = norm;
 						itN = itN + 1;
 					}
@@ -919,7 +933,7 @@ public:
 					t = t + dt;
 				}
 			}
-
+            cout<<"current dt:"<<dt<<endl;
 			if(numStep < bdf)
 				numStep++;
 		}
@@ -1324,6 +1338,50 @@ public:
 
 		return ret;
 	}
+
+    int pierre_linearSolverLU(cusolverDnHandle_t handle, int n, T* Acopy, const T* b, T* x)
+    	{
+    		int bufferSize = 0;
+    		int *info = NULL;
+    		T* buffer = NULL;
+    		int *ipiv = NULL; // pivoting sequence
+    		int h_info = 0;
+
+    		int ret = 0;
+
+
+    		cusolverDnTTgetrf_bufferSize(handle, n, n, (T*)Acopy, n, &bufferSize);
+
+    		cudaMalloc(&info, sizeof(int));
+    		cudaMalloc(&buffer, sizeof(T)*bufferSize);
+    		cudaMalloc(&ipiv, sizeof(int)*n);
+
+
+    		cudaMemset(info, 0, sizeof(int));
+
+    		cusolverDnTTgetrf(handle, n, n, Acopy, n, buffer, ipiv, info);
+    		cudaDeviceSynchronize();
+
+    		cudaMemcpy(&h_info, info, sizeof(int), cudaMemcpyDeviceToHost);
+
+    		if ( 0 != h_info )
+    		{
+    			ret = -1;
+    		}
+    		else
+    		{
+    			cudaMemcpy(x, b, sizeof(T)*n, cudaMemcpyDeviceToDevice);
+    			cusolverDnTTgetrs(handle, CUBLAS_OP_N, n, 1, Acopy, n, ipiv, x, n, info);
+    			cudaDeviceSynchronize();
+    		}
+
+    		if (info  ) { (cudaFree(info  )); }
+    		if (buffer) { (cudaFree(buffer)); }
+    		if (ipiv  ) { (cudaFree(ipiv));}
+
+    		return ret;
+    	}
+
 
 	//cusolverDn<TT>getrf_bufferSize
 	inline cusolverStatus_t cusolverDnTTgetrf_bufferSize(cusolverDnHandle_t handle, int n, int n1,  const double* Acopy, int n2, int* bufferSize)
